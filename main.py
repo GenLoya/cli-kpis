@@ -79,6 +79,29 @@ def load_config(config_path: Path) -> dict:
     return config
 
 
+def resolve_config_path(args: argparse.Namespace) -> Path:
+    """Pick which config.json to read.
+
+    Lookup order:
+      1. Explicit -c argument (always wins)
+      2. ./config.json in the current working directory
+      3. config.json next to the executable (set by 'irm' during install)
+
+    Falls through to a non-existent path if nothing is found; load_config()
+    will then return {} and the CLI uses hardcoded defaults.
+    """
+    if "config" in args:
+        return Path(args.config)
+    cwd_config = Path("config.json")
+    if cwd_config.exists():
+        return cwd_config
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+    else:
+        exe_dir = Path(__file__).resolve().parent
+    return exe_dir / "config.json"
+
+
 def default_output_path(config: dict, today: date | None = None) -> Path:
     """Compute the default output path using config keys with hardcoded fallbacks.
 
@@ -246,8 +269,11 @@ def main():
     parser.add_argument(
         "-c",
         "--config",
-        default="config.json",
-        help="Path to config JSON file (default: config.json)",
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to config JSON file "
+            "(default: ./config.json, then <exe-dir>/config.json)"
+        ),
     )
     parser.add_argument(
         "-t", "--template", default="template.pptx", help="Template .pptx path"
@@ -256,7 +282,7 @@ def main():
 
     json_path = find_json_in(Path(args.folder))
     data = load_and_validate(json_path)
-    config = load_config(Path(args.config))
+    config = load_config(resolve_config_path(args))
     output_path = Path(args.output) if args.output else default_output_path(config)
     fill_template(Path(args.template), data, output_path)
     print(f"Wrote {output_path}")
