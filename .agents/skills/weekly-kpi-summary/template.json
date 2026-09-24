@@ -1,0 +1,20 @@
+{
+  "last_week": [
+    "Migrated the Oracle database helper to use a connection pool for better performance and reliability.",
+    "Updated the order details modal in the Bono (bonus) application.",
+    "Implemented the PDF quote ticket generation modal for Parts Store, including collation fixes.",
+    "Added auto-selection of customer and ship-to from VIN, with default ship-to derived from the customer, in the Warranty Claim application.",
+    "Fixed technician display and ship-to data structure issues in Warranty Claim, plus lint/formatting cleanup."
+  ],
+  "this_week": [
+    "Will continue working on integration testing with IQMS for the warranty application.",
+    "Will make some adjustments to bonuses in the HR system, adding a new type of door/gate bonus."
+  ],
+  "roadblocks": [
+    "Was waiting on the test database for IQMS; now that it's available, testing can begin."
+  ],
+  "key_objectives": [
+    "Complete the warranty claims integration testing in IQMS.",
+    "Finish implementing the new bonus type for HR."
+  ]
+}
