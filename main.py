@@ -102,6 +102,28 @@ def resolve_config_path(args: argparse.Namespace) -> Path:
     return exe_dir / "config.json"
 
 
+def resolve_template_path(args: argparse.Namespace) -> Path:
+    """Pick which template.pptx to read.
+
+    Lookup order:
+      1. Explicit -t argument (always wins)
+      2. ./template.pptx in the current working directory
+      3. template.pptx next to the executable (set by 'irm' during install)
+
+    Returns a Path; the caller should .exists()-check it before use.
+    """
+    if "template" in args:
+        return Path(args.template)
+    cwd_template = Path("template.pptx")
+    if cwd_template.exists():
+        return cwd_template
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+    else:
+        exe_dir = Path(__file__).resolve().parent
+    return exe_dir / "template.pptx"
+
+
 def default_output_path(config: dict, today: date | None = None) -> Path:
     """Compute the default output path using config keys with hardcoded fallbacks.
 
@@ -276,7 +298,13 @@ def main():
         ),
     )
     parser.add_argument(
-        "-t", "--template", default="template.pptx", help="Template .pptx path"
+        "-t",
+        "--template",
+        default=argparse.SUPPRESS,
+        help=(
+            "Path to template .pptx "
+            "(default: ./template.pptx, then <exe-dir>/template.pptx)"
+        ),
     )
     args = parser.parse_args()
 
@@ -284,7 +312,15 @@ def main():
     data = load_and_validate(json_path)
     config = load_config(resolve_config_path(args))
     output_path = Path(args.output) if args.output else default_output_path(config)
-    fill_template(Path(args.template), data, output_path)
+    template_path = resolve_template_path(args)
+    if not template_path.exists():
+        print(
+            f"error: template not found: {template_path} "
+            "(checked ./template.pptx and <exe-dir>/template.pptx)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    fill_template(template_path, data, output_path)
     print(f"Wrote {output_path}")
 
 
