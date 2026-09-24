@@ -1,21 +1,23 @@
 """CLI that fills the Weekly Development Summary PPTX template from a per-week folder.
 
-A weekly folder looks like:
-    .config/my-kpis/kpi-2026-09-25/
-    ├── weekly_summary_2026-09-25.json   (input)
-    └── weekly_summary_2026-09-25.pptx   (output, generated next to the JSON)
+The CLI takes a folder containing a weekly_summary_*.json (input). The output
+PPTX location and filename come from config.json — output_dir is resolved to
+an absolute path (with ~ expansion) and the filename supports {friday} as
+a placeholder.
 
 Usage:
     uv run main.py .config/my-kpis/kpi-2026-09-25/
-    uv run main.py .config/my-kpis/kpi-2026-09-25/ -t template.pptx
+    uv run main.py .config/my-kpis/kpi-2026-09-25/ -o custom.pptx -c custom-config.json
 """
 
 import argparse
 import copy
 import json
+import os
 import sys
 import tempfile
 import zipfile
+from datetime import date, timedelta
 from pathlib import Path
 
 from lxml import etree
@@ -34,10 +36,68 @@ LABELS = {
 }
 
 JSON_GLOB = "weekly_summary_*.json"
+FRIDAY_WEEKDAY = 4  # Python weekday(): Monday=0 .. Sunday=6
+
+DEFAULT_OUTPUT_DIR = "~/Documents"
+DEFAULT_OUTPUT_FILENAME = "weekly_summary_{friday}.pptx"
 
 
-def derive_paths(folder: Path) -> tuple[Path, Path]:
-    """Return (json_path, pptx_path) derived from the weekly folder contents."""
+def friday_of(today: date) -> date:
+    """Return the Friday of the ISO week `today` belongs to (next Fri on Sat/Sun)."""
+    return today + timedelta(days=(FRIDAY_WEEKDAY - today.weekday()) % 7)
+
+
+def expand_placeholders(name: str, today: date) -> str:
+    """Replace supported placeholders. Currently {friday} → ISO date of Friday."""
+    return name.replace("{friday}", friday_of(today).isoformat())
+
+
+def resolve_output_dir(output_dir: str | Path) -> Path:
+    """Expand ~ to user home and resolve to an absolute path."""
+    return Path(os.path.expanduser(str(output_dir))).resolve()
+
+
+def load_config(config_path: Path) -> dict:
+    """Load configuration from a JSON file. Returns {} if the file does not exist.
+
+    Raises SystemExit(1) on malformed JSON so we fail loud instead of silently
+    falling back when the user did intend to use a config.
+    """
+    if not config_path.exists():
+        return {}
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"error: invalid JSON in {config_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(config, dict):
+        print(
+            f"error: {config_path} must contain a JSON object at the top level",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return config
+
+
+def default_output_path(config: dict, today: date | None = None) -> Path:
+    """Compute the default output path using config keys with hardcoded fallbacks.
+
+    output_dir is resolved to an absolute path (~ expanded). output_filename
+    supports {friday} as a placeholder. The directory is created if missing.
+    """
+    if today is None:
+        today = date.today()
+    output_dir = resolve_output_dir(config.get("output_dir", DEFAULT_OUTPUT_DIR))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = expand_placeholders(
+        config.get("output_filename", DEFAULT_OUTPUT_FILENAME),
+        today,
+    )
+    return output_dir / filename
+
+
+def find_json_in(folder: Path) -> Path:
+    """Locate the weekly_summary_*.json inside `folder`. Exit 1 on failure."""
     if not folder.is_dir():
         print(f"error: {folder} is not a directory", file=sys.stderr)
         sys.exit(1)
@@ -50,8 +110,7 @@ def derive_paths(folder: Path) -> tuple[Path, Path]:
             f"warning: multiple {JSON_GLOB} found in {folder}, using {candidates[0].name}",
             file=sys.stderr,
         )
-    json_path = candidates[0]
-    return json_path, json_path.with_suffix(".pptx")
+    return candidates[0]
 
 
 def load_and_validate(json_path: Path) -> dict:
@@ -181,17 +240,24 @@ def main():
         default=None,
         help=(
             "Override output .pptx path "
-            "(default: same folder, same basename as the .json)"
+            "(default: from config.json's output_dir + output_filename)"
         ),
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        default="config.json",
+        help="Path to config JSON file (default: config.json)",
     )
     parser.add_argument(
         "-t", "--template", default="template.pptx", help="Template .pptx path"
     )
     args = parser.parse_args()
 
-    json_path, default_pptx = derive_paths(Path(args.folder))
+    json_path = find_json_in(Path(args.folder))
     data = load_and_validate(json_path)
-    output_path = Path(args.output) if args.output else default_pptx
+    config = load_config(Path(args.config))
+    output_path = Path(args.output) if args.output else default_output_path(config)
     fill_template(Path(args.template), data, output_path)
     print(f"Wrote {output_path}")
 
