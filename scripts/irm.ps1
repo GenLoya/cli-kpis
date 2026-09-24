@@ -60,6 +60,14 @@ Invoke-WebRequest `
     -OutFile $exePath -UseBasicParsing
 Write-OK "Binary:  $exePath"
 
+# --- 3.5. Download config.json next to the exe (consumed by the CLI) ---
+$configPath = Join-Path $InstallDir "config.json"
+Write-Step "Downloading config.json..."
+Invoke-WebRequest `
+    "https://raw.githubusercontent.com/$Repo/$Version/config.json" `
+    -OutFile $configPath -UseBasicParsing
+Write-OK "Config:   $configPath"
+
 # --- 4. Download skill zip (once, reused for both ~/.agents and ~/.claude) ---
 # GetTempFileName() returns a .tmp path, but Expand-Archive requires a .zip
 # extension on Windows PowerShell 5.1, so we rewrite the extension.
