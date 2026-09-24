@@ -61,7 +61,9 @@ Invoke-WebRequest `
 Write-OK "Binary:  $exePath"
 
 # --- 4. Download skill zip (once, reused for both ~/.agents and ~/.claude) ---
-$skillZip = [System.IO.Path]::GetTempFileName()
+# GetTempFileName() returns a .tmp path, but Expand-Archive requires a .zip
+# extension on Windows PowerShell 5.1, so we rewrite the extension.
+$skillZip = [System.IO.Path]::ChangeExtension([System.IO.Path]::GetTempFileName(), ".zip")
 Write-Step "Downloading $SkillName.zip..."
 Invoke-WebRequest `
     "https://github.com/$Repo/releases/download/$Version/$SkillName.zip" `
