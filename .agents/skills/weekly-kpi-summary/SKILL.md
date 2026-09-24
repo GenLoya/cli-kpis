@@ -1,6 +1,6 @@
 ---
 name: weekly-kpi-summary
-description: Generate this week's Weekly Development Summary PPTX by orchestrating the project's cli-kpis CLI. Resolves the current week's Friday folder under .config/my-kpis/kpi-<YYYY-MM-DD>/, interviews the user for last_week, this_week, roadblocks, and key_objectives (suggesting the previous week's objectives as a default), validates the JSON, writes it, and runs `uv run main.py` to produce the .pptx.
+description: Generate this week's Weekly Development Summary PPTX by orchestrating the cli-kpis CLI (installed binary preferred; falls back to `uv run main.py` in repo). Resolves the current week's Friday folder under .config/my-kpis/kpi-<YYYY-MM-DD>/, interviews the user for last_week, this_week, roadblocks, and key_objectives (suggesting the previous week's objectives as a default), validates the JSON, writes it, and runs the CLI to produce the .pptx.
 ---
 
 # Weekly KPI Summary
@@ -32,7 +32,7 @@ Cuando el usuario pida crear, actualizar o regenerar el resumen semanal / weekly
 - `output_dir`: ruta absoluta (se expande `~` al home del usuario)
 - `output_filename`: soporta el placeholder `{friday}`
 
-El default commiteado apunta a `~/Documents/weekly_summary_<YYYY-MM-DD>.pptx`. El CLI vive en la raíz del proyecto y se invoca con `uv run main.py <carpeta-semanal>`.
+El default commiteado apunta a `~/Documents/weekly_summary_<YYYY-MM-DD>.pptx`. El CLI se invoca con `cli-kpis <carpeta-semanal>` si está instalado vía `irm` (preferido); fallback dev/repo: `uv run main.py <carpeta-semanal>`.
 
 ## Workflow
 
@@ -97,10 +97,23 @@ El formato completo se ve en `template.json` (junto a este SKILL.md).
 
 ### 8. Correr el CLI
 
-Desde la raíz del proyecto:
+Resolver qué binario usar (orden de preferencia):
+
+1. **`cli-kpis`** (instalado por `irm` en el PATH del usuario). Verificar con `command -v cli-kpis` (bash) o `Get-Command cli-kpis` (PowerShell).
+2. **Fallback dev/repo**: si lo anterior falla y existen `uv` + `main.py` en el cwd, usar `uv run main.py <carpeta-semanal>`.
+3. **Fail**: si ninguno está disponible, mostrar `cli-kpis no instalado. corré 'irm' desde https://github.com/GenLoya/cli-kpis, o cloná el repo y usá uv.` y abortar.
+
+Snippet (bash):
 
 ```bash
-uv run main.py <carpeta-semanal>
+if command -v cli-kpis >/dev/null 2>&1; then
+    cli-kpis <carpeta-semanal>
+elif command -v uv >/dev/null 2>&1 && [ -f main.py ]; then
+    uv run main.py <carpeta-semanal>
+else
+    echo "error: ni cli-kpis instalado ni uv/main.py disponibles." >&2
+    exit 1
+fi
 ```
 
 Esto regenera el `.pptx` en la ruta definida por `config.json` (default: `~/Documents/weekly_summary_<friday>.pptx`). Reportar la ruta exacta al usuario.
@@ -113,4 +126,4 @@ Mostrar las rutas finales (carpeta, JSON, PPTX) y ofrecer commit / share / revis
 
 - **CLI sale non-zero** (ej. JSON mal editado a mano): mostrar stderr textual y ofrecer reabrir la entrevista.
 - **PowerPoint tiene el `.pptx` anterior abierto** (lock file `~$weekly_summary_*.pptx`): avisar antes de sobrescribir.
-- **`template.pptx` falta en la raíz del proyecto**: fallar antes de correr el CLI.
+- **`template.pptx` no se encuentra** (ni en cwd ni al lado del binario): fallar antes de correr el CLI. Después de `irm`, el template vive al lado del exe (`$env:LOCALAPPDATA\Programs\cli-kpis\template.pptx`); en modo dev vive en la raíz del repo.
