@@ -54,7 +54,7 @@ El default commiteado apunta a `~/Documents/weekly_summary_<YYYY-MM-DD>.pptx`. E
 
 - `prev_friday = friday - timedelta(days=7)`
 - `prev_json = .config/my-kpis/kpi-<prev_friday>/weekly_summary_<prev_friday>.json`
-- Si existe, leer su array `key_objectives` y usarlos como **sugerencias** para esta semana.
+- Si existe, leer su array `key_objectives` y usarlos como **sugerencias para la próxima semana** (en el JSON anterior eran "lo importante para esta semana" desde esa perspectiva).
 - Si no existe, saltear la sugerencia y preguntar directo.
 
 ### 4. Cargar JSON existente (si ya hay uno esta semana)
@@ -65,10 +65,19 @@ El default commiteado apunta a `~/Documents/weekly_summary_<YYYY-MM-DD>.pptx`. E
 
 ### 5. Entrevistar al usuario (en este orden)
 
-1. **last_week** — ¿Qué hiciste / entregaste la semana pasada? (bullets)
-2. **this_week** — ¿Qué tenés planeado para el resto de la semana? (planes, bullets)
+1. **last_week** — Lo que hiciste **esta semana** (la que termina hoy, lunes a viernes).
+
+   **Auto-derivar desde commits**:
+   - Cargar `~/.config/cli-kpis/projects.txt` (una carpeta por línea, soporta `~`). Si el archivo no existe o está vacío, preguntar al usuario: "¿En qué carpeta(s) guardás tus proyectos?" (ruta única o varias separadas por coma, ej. `~/Projects, ~/work/clients`). Crear el directorio padre si hace falta y persistir la respuesta.
+   - Por cada carpeta listada:
+     - Si no existe, saltear con aviso.
+     - Buscar recursivamente subcarpetas que contengan `.git` (bash: `find <carpeta> -name .git -type d`).
+     - Por cada repo encontrado (`dirname .git`): `cd <repo> && git log --since="<friday - 4 days> 00:00" --until="<friday> 23:59" --no-merges --pretty=format:"- %s"`. Acumular los commits.
+   - Mostrar el resumen auto-derivado y preguntar: **"¿Falta algo? ¿Tareas no commiteadas (reuniones, mentoring, deploys, docs)?"** Combinar los bullets auto-derivados con lo que el usuario mencione para formar la sección final.
+
+2. **this_week** — Planes para la **próxima semana** (la que viene). Bullets.
 3. **roadblocks** — ¿Algo te está bloqueando? Lista vacía es válida.
-4. **key_objectives** — Mostrar los `key_objectives` de la semana anterior como sugerencias y pedir confirmación: mantener, modificar, agregar o reemplazar.
+4. **key_objectives** — Las prioridades clave para la próxima semana. Mostrar los `key_objectives` de la semana anterior como sugerencias y pedir confirmación: mantener, modificar, agregar o reemplazar.
 
 Aceptar: lista JSON, bullets por línea, o prosa que se splitea. Lista vacía `[]` es válida.
 
