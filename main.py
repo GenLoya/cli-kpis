@@ -1,8 +1,13 @@
-"""CLI that fills the Weekly Development Summary PPTX template from a JSON file.
+"""CLI that fills the Weekly Development Summary PPTX template from a per-week folder.
+
+A weekly folder looks like:
+    .config/my-kpis/kpi-2026-09-25/
+    ├── weekly_summary_2026-09-25.json   (input)
+    └── weekly_summary_2026-09-25.pptx   (output, generated next to the JSON)
 
 Usage:
-    uv run main.py data.json
-    uv run main.py data.json -o out.pptx -t template.pptx
+    uv run main.py .config/my-kpis/kpi-2026-09-25/
+    uv run main.py .config/my-kpis/kpi-2026-09-25/ -t template.pptx
 """
 
 import argparse
@@ -11,7 +16,6 @@ import json
 import sys
 import tempfile
 import zipfile
-from datetime import date, timedelta
 from pathlib import Path
 
 from lxml import etree
@@ -29,54 +33,53 @@ LABELS = {
     "key_objectives": "key objectives",
 }
 
-OUTPUT_DIR = Path("my-kpis")
-OUTPUT_FILENAME = "weekly_summary_{friday}.pptx"
-FRIDAY_WEEKDAY = 4  # Python weekday(): Monday=0 .. Sunday=6
+JSON_GLOB = "weekly_summary_*.json"
 
 
-def friday_of(today: date) -> date:
-    """Return the Friday of the ISO week `today` belongs to (next Fri on Sat/Sun)."""
-    return today + timedelta(days=(FRIDAY_WEEKDAY - today.weekday()) % 7)
-
-
-def expand_placeholders(name: str, today: date) -> str:
-    """Replace supported placeholders. Currently {friday} → ISO date of Friday."""
-    return name.replace("{friday}", friday_of(today).isoformat())
-
-
-def load_config(config_path: Path) -> dict:
-    """Load configuration from a JSON file. Returns {} if the file does not exist.
-
-    Raises SystemExit(1) on malformed JSON so we fail loud instead of silently
-    falling back when the user did intend to use a config.
-    """
-    if not config_path.exists():
-        return {}
-    try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        print(f"error: invalid JSON in {config_path}: {e}", file=sys.stderr)
+def derive_paths(folder: Path) -> tuple[Path, Path]:
+    """Return (json_path, pptx_path) derived from the weekly folder contents."""
+    if not folder.is_dir():
+        print(f"error: {folder} is not a directory", file=sys.stderr)
         sys.exit(1)
-    if not isinstance(config, dict):
+    candidates = sorted(folder.glob(JSON_GLOB))
+    if not candidates:
+        print(f"error: no {JSON_GLOB} found in {folder}", file=sys.stderr)
+        sys.exit(1)
+    if len(candidates) > 1:
         print(
-            f"error: {config_path} must contain a JSON object at the top level",
+            f"warning: multiple {JSON_GLOB} found in {folder}, using {candidates[0].name}",
+            file=sys.stderr,
+        )
+    json_path = candidates[0]
+    return json_path, json_path.with_suffix(".pptx")
+
+
+def load_and_validate(json_path: Path) -> dict:
+    """Read and strictly validate the weekly JSON. Exit 1 on any failure."""
+    try:
+        raw = json_path.read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"error: cannot read {json_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"error: invalid JSON in {json_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(data, dict):
+        print(
+            f"error: {json_path} must contain a JSON object at the top level",
             file=sys.stderr,
         )
         sys.exit(1)
-    return config
-
-
-def default_output_path(config: dict, today: date | None = None) -> Path:
-    """Compute the default output path using config keys with hardcoded fallbacks."""
-    if today is None:
-        today = date.today()
-    output_dir = Path(config.get("output_dir", str(OUTPUT_DIR)))
-    output_dir.mkdir(parents=True, exist_ok=True)
-    filename = expand_placeholders(
-        config.get("output_filename", OUTPUT_FILENAME),
-        today,
-    )
-    return output_dir / filename
+    missing = [k for k in LABELS if k not in data]
+    if missing:
+        print(
+            f"error: {json_path} is missing required keys: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return data
 
 
 def cell_header_text(tc):
@@ -163,32 +166,32 @@ def fill_template(template_path: Path, data: dict, output_path: Path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Fill a Weekly Development Summary PPTX from a JSON file."
+        description="Fill a Weekly Development Summary PPTX from a per-week folder."
     )
     parser.add_argument(
-        "input",
-        help="JSON file with keys: last_week, this_week, roadblocks, key_objectives",
+        "folder",
+        help=(
+            "Folder containing weekly_summary_*.json with keys: "
+            "last_week, this_week, roadblocks, key_objectives"
+        ),
     )
     parser.add_argument(
         "-o",
         "--output",
         default=None,
-        help="Output .pptx path (default: from config.json or ./my-kpis/weekly_summary_<friday>.pptx)",
-    )
-    parser.add_argument(
-        "-c",
-        "--config",
-        default="config.json",
-        help="Path to config JSON file (default: config.json)",
+        help=(
+            "Override output .pptx path "
+            "(default: same folder, same basename as the .json)"
+        ),
     )
     parser.add_argument(
         "-t", "--template", default="template.pptx", help="Template .pptx path"
     )
     args = parser.parse_args()
 
-    data = json.loads(Path(args.input).read_text(encoding="utf-8"))
-    config = load_config(Path(args.config))
-    output_path = Path(args.output) if args.output else default_output_path(config)
+    json_path, default_pptx = derive_paths(Path(args.folder))
+    data = load_and_validate(json_path)
+    output_path = Path(args.output) if args.output else default_pptx
     fill_template(Path(args.template), data, output_path)
     print(f"Wrote {output_path}")
 
