@@ -10,3 +10,4 @@ wheels/
 .venv
 my-kpis/
 .config/
+.dist/
