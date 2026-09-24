@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Build standalone binary
+        run: uv run pyinstaller --onefile --name cli-kpis --distpath .dist --clean main.py
+
+      - name: Package skill as zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path .agents/skills/weekly-kpi-summary `
+            -DestinationPath .dist/weekly-kpi-summary.zip
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            .dist/cli-kpis.exe
+            .dist/weekly-kpi-summary.zip
+            template.pptx
