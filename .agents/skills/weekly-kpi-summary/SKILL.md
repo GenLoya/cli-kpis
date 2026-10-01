@@ -72,7 +72,11 @@ El default commiteado apunta a `~/Documents/weekly_summary_<YYYY-MM-DD>.pptx`. E
    - Por cada carpeta listada:
      - Si no existe, saltear con aviso.
      - Buscar recursivamente subcarpetas que contengan `.git` (bash: `find <carpeta> -name .git -type d`).
-     - Por cada repo encontrado (`dirname .git`): `cd <repo> && git log --since="<friday - 4 days> 00:00" --until="<friday> 23:59" --no-merges --pretty=format:"- %s"`. Acumular los commits.
+     - Por cada repo encontrado (`dirname .git`): resolver el autor con `git -C <repo> config user.email` (respeta config local o global) y correr `git -C <repo> log --author="<email>" --since="<friday - 4 days> 00:00" --until="<friday> 23:59" --no-merges --pretty=format:"- %s"`. Si `user.email` está vacío, usar `user.name`. **Solo commits del usuario** — nunca incluir commits de otros autores en repos compartidos.
+   - **Redactar en lenguaje natural, no programático**: convertir los commits en logros entendibles por alguien no técnico. Nada de prefijos conventional commit (`feat:`, `fix:`), nombres de variables/flags (`enable_discounts`), ni jerga como "upserts" o "CI".
+     - Prefijar con el nombre legible del proyecto, no el nombre del repo (ej. `TX_PARTS_STORE` → `Parts Store`). Si no es obvio, preguntar.
+     - Agrupar commits relacionados en un solo bullet; omitir cambios triviales o de infraestructura interna (quitar CI, lint, chores, uploads).
+     - Ej.: `feat: add per-item enable_discounts toggle` → `Parts Store: added item configuration to control when items automatically take the dealer discount.`
    - Mostrar el resumen auto-derivado y preguntar: **"¿Falta algo? ¿Tareas no commiteadas (reuniones, mentoring, deploys, docs)?"** Combinar los bullets auto-derivados con lo que el usuario mencione para formar la sección final.
 
 2. **this_week** — Planes para la **próxima semana** (la que viene). Bullets.
@@ -85,8 +89,8 @@ Una sección válida luce así:
 
 ```json
 [
-  "Migré el helper de Oracle a connection pool",
-  "Actualicé el modal de order details en Bono"
+  "Parts Store: added item configuration to control when items automatically take the dealer discount.",
+  "Customer Status: fixed the charts in the trailers goal report."
 ]
 ```
 
@@ -126,6 +130,11 @@ fi
 ```
 
 Esto regenera el `.pptx` en la ruta definida por `config.json` (default: `~/Documents/weekly_summary_<friday>.pptx`). Reportar la ruta exacta al usuario.
+
+Abrir el `.pptx` generado (tomar la ruta de la línea `Wrote <ruta>` del output del CLI):
+
+- Windows (PowerShell): `start "<ruta-pptx>"`
+- Bash en Windows: `cmd //c start "" "<ruta-pptx>"`
 
 ### 9. Listo
 
